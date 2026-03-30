@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from medical_agent.config import ConfigError, load_config, load_llm_config
+from medical_agent.config import ConfigError, load_api_config, load_config, load_llm_config
 
 
 class LoadLLMConfigTests(unittest.TestCase):
@@ -109,6 +109,60 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(cfg.neo4j_uri, "bolt://localhost:7687")
         self.assertEqual(cfg.llm_api_key, "sk-live")
         self.assertEqual(cfg.request_timeout, 20.0)
+
+
+class LoadAPIConfigTests(unittest.TestCase):
+    def test_load_api_config_uses_defaults(self) -> None:
+        cfg = load_api_config({})
+        self.assertEqual(cfg.host, "0.0.0.0")
+        self.assertEqual(cfg.port, 8080)
+        self.assertFalse(cfg.debug)
+        self.assertEqual(cfg.evidence_preview_limit, 3)
+        self.assertEqual(
+            cfg.vector_index_path,
+            "/root/llm_learning/data/EXAM/exam_rag_faiss.index",
+        )
+        self.assertEqual(
+            cfg.vector_meta_path,
+            "/root/llm_learning/data/EXAM/exam_rag_meta.jsonl",
+        )
+        self.assertEqual(cfg.graph_top_k, 3)
+        self.assertEqual(cfg.text_top_k, 5)
+        self.assertEqual(cfg.text_recall_k, 20)
+        self.assertEqual(cfg.evidence_top_k, 5)
+
+    def test_load_api_config_reads_overrides(self) -> None:
+        env = {
+            "API_HOST": "127.0.0.1",
+            "API_PORT": "9000",
+            "API_DEBUG": "true",
+            "EVIDENCE_PREVIEW_LIMIT": "6",
+            "VECTOR_INDEX_PATH": "/tmp/a.index",
+            "VECTOR_META_PATH": "/tmp/a.jsonl",
+            "GRAPH_TOP_K": "4",
+            "TEXT_TOP_K": "8",
+            "TEXT_RECALL_K": "30",
+            "EVIDENCE_TOP_K": "7",
+        }
+        cfg = load_api_config(env)
+        self.assertEqual(cfg.host, "127.0.0.1")
+        self.assertEqual(cfg.port, 9000)
+        self.assertTrue(cfg.debug)
+        self.assertEqual(cfg.evidence_preview_limit, 6)
+        self.assertEqual(cfg.vector_index_path, "/tmp/a.index")
+        self.assertEqual(cfg.vector_meta_path, "/tmp/a.jsonl")
+        self.assertEqual(cfg.graph_top_k, 4)
+        self.assertEqual(cfg.text_top_k, 8)
+        self.assertEqual(cfg.text_recall_k, 30)
+        self.assertEqual(cfg.evidence_top_k, 7)
+
+    def test_load_api_config_rejects_invalid_values(self) -> None:
+        with self.assertRaises(ConfigError):
+            load_api_config({"API_PORT": "abc"})
+        with self.assertRaises(ConfigError):
+            load_api_config({"API_DEBUG": "maybe"})
+        with self.assertRaises(ConfigError):
+            load_api_config({"GRAPH_TOP_K": "0"})
 
 
 if __name__ == "__main__":

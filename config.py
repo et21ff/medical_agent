@@ -29,6 +29,20 @@ class AgentConfig:
     request_timeout: float = 30.0
 
 
+@dataclass(frozen=True)
+class APIConfig:
+    host: str
+    port: int
+    debug: bool
+    evidence_preview_limit: int
+    vector_index_path: str
+    vector_meta_path: str
+    graph_top_k: int
+    text_top_k: int
+    text_recall_k: int
+    evidence_top_k: int
+
+
 def _read_required(env: Mapping[str, str], key: str) -> str:
     value = env.get(key, "").strip()
     if not value:
@@ -47,6 +61,30 @@ def _read_optional_float(env: Mapping[str, str], key: str, default: float) -> fl
     if value <= 0:
         raise ConfigError(f"Environment variable {key} must be > 0, got: {value}")
     return value
+
+
+def _read_optional_int(env: Mapping[str, str], key: str, default: int) -> int:
+    raw = env.get(key, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ConfigError(f"Environment variable {key} must be an int, got: {raw}") from exc
+    if value <= 0:
+        raise ConfigError(f"Environment variable {key} must be > 0, got: {value}")
+    return value
+
+
+def _read_optional_bool(env: Mapping[str, str], key: str, default: bool) -> bool:
+    raw = env.get(key, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"Environment variable {key} must be a boolean, got: {raw}")
 
 
 def _read_preferred(
@@ -126,4 +164,37 @@ def load_config(env: Mapping[str, str] | None = None) -> AgentConfig:
         llm_api_key=llm_cfg.llm_api_key,
         llm_model=llm_cfg.llm_model,
         request_timeout=llm_cfg.request_timeout,
+    )
+
+
+def load_api_config(env: Mapping[str, str] | None = None) -> APIConfig:
+    """
+    Load API runtime config.
+
+    Optional environment variables:
+      - API_HOST (default: 0.0.0.0)
+      - API_PORT (default: 8080)
+      - API_DEBUG (default: false)
+      - EVIDENCE_PREVIEW_LIMIT (default: 3)
+      - VECTOR_INDEX_PATH (default: /root/llm_learning/data/EXAM/exam_rag_faiss.index)
+      - VECTOR_META_PATH (default: /root/llm_learning/data/EXAM/exam_rag_meta.jsonl)
+      - GRAPH_TOP_K (default: 3)
+      - TEXT_TOP_K (default: 5)
+      - TEXT_RECALL_K (default: 20)
+      - EVIDENCE_TOP_K (default: 5)
+    """
+    source = env if env is not None else os.environ
+    return APIConfig(
+        host=source.get("API_HOST", "").strip() or "0.0.0.0",
+        port=_read_optional_int(source, "API_PORT", 8080),
+        debug=_read_optional_bool(source, "API_DEBUG", False),
+        evidence_preview_limit=_read_optional_int(source, "EVIDENCE_PREVIEW_LIMIT", 3),
+        vector_index_path=source.get("VECTOR_INDEX_PATH", "").strip()
+        or "/root/llm_learning/data/EXAM/exam_rag_faiss.index",
+        vector_meta_path=source.get("VECTOR_META_PATH", "").strip()
+        or "/root/llm_learning/data/EXAM/exam_rag_meta.jsonl",
+        graph_top_k=_read_optional_int(source, "GRAPH_TOP_K", 3),
+        text_top_k=_read_optional_int(source, "TEXT_TOP_K", 5),
+        text_recall_k=_read_optional_int(source, "TEXT_RECALL_K", 20),
+        evidence_top_k=_read_optional_int(source, "EVIDENCE_TOP_K", 5),
     )

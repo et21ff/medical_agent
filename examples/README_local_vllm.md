@@ -61,3 +61,54 @@ python -m medical_agent.examples.inspect_response_structure --prompt "你好，�
 ```
 
 If the output contains normal `choices[0].message.content`, `medical_agent` has switched to local backend successfully.
+
+## 4) Start FastAPI service
+
+After `.env` is configured (Neo4j/embedding/LLM), start the single-endpoint API:
+
+```bash
+cd /root/llm_learning
+/root/pytorch-env/bin/python -m medical_agent.api_app
+```
+
+Default endpoint:
+
+- `POST http://127.0.0.1:8080/chat`
+- `GET  http://127.0.0.1:8080/healthz`
+- `GET  http://127.0.0.1:8080/readyz`
+
+Quick check:
+
+```bash
+curl -s http://127.0.0.1:8080/healthz
+```
+
+Chat example:
+
+```bash
+curl -s http://127.0.0.1:8080/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "关心和理解艾滋病病毒感染者，最需掌握的生活技能是",
+    "retrieval_options": {
+      "graph_top_k": 3,
+      "text_top_k": 5
+    }
+  }'
+```
+
+## 5) One-command API acceptance smoke
+
+Use the bundled script to verify `/healthz` + `/chat` and basic response constraints:
+
+```bash
+bash medical_agent/examples/smoke_api_chat.sh
+```
+
+Custom endpoint or custom question:
+
+```bash
+BASE_URL=http://127.0.0.1:8080 \
+QUESTION="如何预防结膜炎" \
+bash medical_agent/examples/smoke_api_chat.sh
+```
