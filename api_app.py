@@ -53,13 +53,21 @@ def create_app(service: MedicalQAService | None = None):
         request_id = str(uuid.uuid4())
         try:
             options = _merge_retrieval_options(svc.default_options, request.retrieval_options)
-            result = svc.ask(request.question, options=options)
+            result = svc.ask(
+                request.user_id,
+                request.question,
+                session_id=request.session_id,
+                options=options,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"upstream error: {exc}") from exc
 
         return ChatResponse(
+            user_id=result.user_id,
+            session_id=result.session_id,
+            history_turns_used=result.history_turns_used,
             answer=result.answer,
             evidence_preview=result.evidence_preview,
             query_variants=result.query_variants,

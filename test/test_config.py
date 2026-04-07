@@ -136,6 +136,11 @@ class LoadAPIConfigTests(unittest.TestCase):
         self.assertEqual(cfg.rag_cache_ttl_seconds, 1800)
         self.assertEqual(cfg.rag_cache_key_version, "v1")
         self.assertEqual(cfg.rag_corpus_version, "exam_v1")
+        self.assertTrue(cfg.session_enabled)
+        self.assertEqual(cfg.session_backend, "redis")
+        self.assertEqual(cfg.session_redis_url, "redis://127.0.0.1:6379/0")
+        self.assertEqual(cfg.session_ttl_seconds, 604800)
+        self.assertEqual(cfg.max_history_turns, 6)
 
     def test_load_api_config_reads_overrides(self) -> None:
         env = {
@@ -155,6 +160,11 @@ class LoadAPIConfigTests(unittest.TestCase):
             "RAG_CACHE_TTL_SECONDS": "3600",
             "RAG_CACHE_KEY_VERSION": "v9",
             "RAG_CORPUS_VERSION": "exam_v9",
+            "SESSION_ENABLED": "false",
+            "SESSION_BACKEND": "redis",
+            "SESSION_REDIS_URL": "redis://127.0.0.1:6390/2",
+            "SESSION_TTL_SECONDS": "1200",
+            "MAX_HISTORY_TURNS": "4",
         }
         cfg = load_api_config(env)
         self.assertEqual(cfg.host, "127.0.0.1")
@@ -173,6 +183,11 @@ class LoadAPIConfigTests(unittest.TestCase):
         self.assertEqual(cfg.rag_cache_ttl_seconds, 3600)
         self.assertEqual(cfg.rag_cache_key_version, "v9")
         self.assertEqual(cfg.rag_corpus_version, "exam_v9")
+        self.assertFalse(cfg.session_enabled)
+        self.assertEqual(cfg.session_backend, "redis")
+        self.assertEqual(cfg.session_redis_url, "redis://127.0.0.1:6390/2")
+        self.assertEqual(cfg.session_ttl_seconds, 1200)
+        self.assertEqual(cfg.max_history_turns, 4)
 
     def test_load_api_config_rejects_invalid_values(self) -> None:
         with self.assertRaises(ConfigError):
@@ -183,6 +198,10 @@ class LoadAPIConfigTests(unittest.TestCase):
             load_api_config({"GRAPH_TOP_K": "0"})
         with self.assertRaises(ConfigError):
             load_api_config({"CACHE_BACKEND": "postgres"})
+        with self.assertRaises(ConfigError):
+            load_api_config({"SESSION_BACKEND": "memory"})
+        with self.assertRaises(ConfigError):
+            load_api_config({"MAX_HISTORY_TURNS": "0"})
 
 
 if __name__ == "__main__":

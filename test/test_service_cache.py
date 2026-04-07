@@ -42,12 +42,13 @@ def test_service_cache_miss_then_hit() -> None:
         cache_store=store,
     )
 
-    first = service.ask("如何预防结膜炎")
-    second = service.ask("如何预防结膜炎")
+    first = service.ask("u1", "如何预防结膜炎")
+    second = service.ask("u1", "如何预防结膜炎")
 
     assert pipeline.calls == 1
     assert first.cache_hit is False
     assert second.cache_hit is True
+    assert first.user_id == "u1"
+    assert first.session_id == "stateless"
     assert first.answer == "ok"
     assert second.answer == "ok"
-

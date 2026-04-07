@@ -47,12 +47,17 @@ class APIConfig:
     rag_cache_ttl_seconds: int
     rag_cache_key_version: str
     rag_corpus_version: str
+    session_enabled: bool
+    session_backend: str
+    session_redis_url: str
+    session_ttl_seconds: int
+    max_history_turns: int
 
 
 def _read_required(env: Mapping[str, str], key: str) -> str:
     value = env.get(key, "").strip()
     if not value:
-        raise ConfigError(f"Missinos.environg required environment variable: {key}")
+        raise ConfigError(f"Missing required environment variable: {key}")
     return value
 
 
@@ -194,6 +199,11 @@ def load_api_config(env: Mapping[str, str] | None = None) -> APIConfig:
       - RAG_CACHE_TTL_SECONDS (default: 1800)
       - RAG_CACHE_KEY_VERSION (default: v1)
       - RAG_CORPUS_VERSION (default: exam_v1)
+      - SESSION_ENABLED (default: true)
+      - SESSION_BACKEND (default: redis)
+      - SESSION_REDIS_URL (default: same as REDIS_URL)
+      - SESSION_TTL_SECONDS (default: 604800)
+      - MAX_HISTORY_TURNS (default: 6)
     """
     source = env if env is not None else os.environ
     cache_backend = (source.get("CACHE_BACKEND", "").strip() or "redis").lower()
@@ -201,6 +211,12 @@ def load_api_config(env: Mapping[str, str] | None = None) -> APIConfig:
         raise ConfigError(
             f"Environment variable CACHE_BACKEND must be 'redis' in V1, got: {cache_backend}"
         )
+    session_backend = (source.get("SESSION_BACKEND", "").strip() or "redis").lower()
+    if session_backend != "redis":
+        raise ConfigError(
+            f"Environment variable SESSION_BACKEND must be 'redis' in V1, got: {session_backend}"
+        )
+    redis_url = source.get("REDIS_URL", "").strip() or "redis://127.0.0.1:6379/0"
     return APIConfig(
         host=source.get("API_HOST", "").strip() or "0.0.0.0",
         port=_read_optional_int(source, "API_PORT", 8080),
@@ -216,8 +232,13 @@ def load_api_config(env: Mapping[str, str] | None = None) -> APIConfig:
         evidence_top_k=_read_optional_int(source, "EVIDENCE_TOP_K", 5),
         cache_enabled=_read_optional_bool(source, "CACHE_ENABLED", True),
         cache_backend=cache_backend,
-        redis_url=source.get("REDIS_URL", "").strip() or "redis://127.0.0.1:6379/0",
+        redis_url=redis_url,
         rag_cache_ttl_seconds=_read_optional_int(source, "RAG_CACHE_TTL_SECONDS", 1800),
         rag_cache_key_version=source.get("RAG_CACHE_KEY_VERSION", "").strip() or "v1",
         rag_corpus_version=source.get("RAG_CORPUS_VERSION", "").strip() or "exam_v1",
+        session_enabled=_read_optional_bool(source, "SESSION_ENABLED", True),
+        session_backend=session_backend,
+        session_redis_url=source.get("SESSION_REDIS_URL", "").strip() or redis_url,
+        session_ttl_seconds=_read_optional_int(source, "SESSION_TTL_SECONDS", 604800),
+        max_history_turns=_read_optional_int(source, "MAX_HISTORY_TURNS", 6),
     )

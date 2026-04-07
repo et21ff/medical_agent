@@ -16,12 +16,16 @@ class RetrievalOptionsPayload(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    user_id: str = Field(min_length=1)
     question: str = Field(min_length=1)
     session_id: str | None = None
     retrieval_options: RetrievalOptionsPayload | None = None
 
 
 class ChatResponse(BaseModel):
+    user_id: str
+    session_id: str
+    history_turns_used: int
     answer: str
     evidence_preview: list[dict[str, Any]]
     query_variants: list[str]

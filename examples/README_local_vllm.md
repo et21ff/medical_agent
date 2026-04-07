@@ -89,6 +89,7 @@ Chat example:
 curl -s http://127.0.0.1:8080/chat \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "demo-user-1",
     "question": "关心和理解艾滋病病毒感染者，最需掌握的生活技能是",
     "retrieval_options": {
       "graph_top_k": 3,
@@ -109,6 +110,7 @@ Custom endpoint or custom question:
 
 ```bash
 BASE_URL=http://127.0.0.1:8080 \
+USER_ID=demo-user-1 \
 QUESTION="如何预防结膜炎" \
 bash medical_agent/examples/smoke_api_chat.sh
 ```
@@ -127,3 +129,30 @@ export RAG_CORPUS_VERSION=exam_v1
 ```
 
 If Redis is unavailable, the service will fall back to direct retrieval automatically.
+
+## 7) Enable multi-user session short memory (Redis)
+
+`/chat` is still HTTP stateless, but server keeps short memory by `user_id + session_id`.
+
+- If request has no `session_id`, server creates and returns a new one.
+- If request carries `session_id`, server loads recent turns and prepends them before current question.
+
+```bash
+export SESSION_ENABLED=true
+export SESSION_BACKEND=redis
+export SESSION_REDIS_URL=redis://127.0.0.1:6379/0
+export SESSION_TTL_SECONDS=604800
+export MAX_HISTORY_TURNS=6
+```
+
+Example with explicit session continuation:
+
+```bash
+curl -s http://127.0.0.1:8080/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "demo-user-1",
+    "session_id": "replace-with-returned-session-id",
+    "question": "继续解释上一题"
+  }'
+```

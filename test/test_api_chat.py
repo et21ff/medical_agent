@@ -21,13 +21,23 @@ class FakeService:
     )
     seen_options: RetrievalOptions | None = None
 
-    def ask(self, question: str, *, options: RetrievalOptions | None = None) -> ChatResult:
+    def ask(
+        self,
+        user_id: str,
+        question: str,
+        *,
+        session_id: str | None = None,
+        options: RetrievalOptions | None = None,
+    ) -> ChatResult:
         if question == "bad":
             raise ValueError("question must not be empty")
         if question == "boom":
             raise RuntimeError("upstream failed")
         self.seen_options = options
         return ChatResult(
+            user_id=user_id,
+            session_id=session_id or "sid-test",
+            history_turns_used=0,
             answer=f"ans:{question}",
             evidence_preview=[{"source": "text", "score": 1.2, "text": "证据"}],
             query_variants=[question],
@@ -56,9 +66,12 @@ def test_health_and_ready() -> None:
 
 def test_chat_success() -> None:
     client, _ = _build_client()
-    response = client.post("/chat", json={"question": "左心衰竭最早症状"})
+    response = client.post("/chat", json={"user_id": "u1", "question": "左心衰竭最早症状"})
     assert response.status_code == 200
     data = response.json()
+    assert data["user_id"] == "u1"
+    assert data["session_id"] == "sid-test"
+    assert data["history_turns_used"] == 0
     assert data["answer"] == "ans:左心衰竭最早症状"
     assert data["evidence_preview"]
     assert data["query_variants"] == ["左心衰竭最早症状"]
@@ -74,6 +87,7 @@ def test_chat_passes_override_options() -> None:
     response = client.post(
         "/chat",
         json={
+            "user_id": "u1",
             "question": "q",
             "retrieval_options": {
                 "text_top_k": 2,
@@ -90,11 +104,17 @@ def test_chat_passes_override_options() -> None:
 
 def test_chat_value_error_to_400() -> None:
     client, _ = _build_client()
-    response = client.post("/chat", json={"question": "bad"})
+    response = client.post("/chat", json={"user_id": "u1", "question": "bad"})
     assert response.status_code == 400
 
 
 def test_chat_unexpected_error_to_502() -> None:
     client, _ = _build_client()
-    response = client.post("/chat", json={"question": "boom"})
+    response = client.post("/chat", json={"user_id": "u1", "question": "boom"})
     assert response.status_code == 502
+
+
+def test_chat_missing_user_id_to_422() -> None:
+    client, _ = _build_client()
+    response = client.post("/chat", json={"question": "q"})
+    assert response.status_code == 422

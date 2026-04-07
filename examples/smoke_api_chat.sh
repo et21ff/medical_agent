@@ -3,6 +3,9 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
 QUESTION="${QUESTION:-关心和理解艾滋病病毒感染者，最需掌握的生活技能是}"
+USER_ID="${USER_ID:-smoke-user}"
+SESSION_ID="${SESSION_ID:-}"
+export QUESTION USER_ID SESSION_ID
 
 echo "[smoke] base url: ${BASE_URL}"
 echo "[smoke] check healthz..."
@@ -11,10 +14,24 @@ cat /tmp/medical_agent_healthz.json
 echo
 
 echo "[smoke] check chat..."
+CHAT_BODY="$(/root/pytorch-env/bin/python - <<'PY'
+import json
+import os
+
+payload = {
+    "user_id": os.environ["USER_ID"],
+    "question": os.environ["QUESTION"],
+}
+session_id = os.environ.get("SESSION_ID", "").strip()
+if session_id:
+    payload["session_id"] = session_id
+print(json.dumps(payload, ensure_ascii=False))
+PY
+)"
 HTTP_CODE="$(curl -sS -o /tmp/medical_agent_chat.json -w "%{http_code}" \
   -X POST "${BASE_URL}/chat" \
   -H "Content-Type: application/json" \
-  -d "{\"question\":\"${QUESTION}\"}")"
+  -d "${CHAT_BODY}")"
 
 if [[ "${HTTP_CODE}" != "200" ]]; then
   echo "[error] /chat returned HTTP ${HTTP_CODE}"
@@ -32,7 +49,16 @@ import json
 from pathlib import Path
 
 data = json.loads(Path("/tmp/medical_agent_chat.json").read_text(encoding="utf-8"))
-required = ["answer", "evidence_preview", "query_variants", "request_id", "latency_ms"]
+required = [
+    "user_id",
+    "session_id",
+    "history_turns_used",
+    "answer",
+    "evidence_preview",
+    "query_variants",
+    "request_id",
+    "latency_ms",
+]
 missing = [k for k in required if k not in data]
 if missing:
     raise SystemExit(f"[error] missing keys: {missing}")

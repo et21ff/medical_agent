@@ -78,6 +78,12 @@ def _run_load(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark /chat concurrency for medical_agent API.")
     parser.add_argument("--url", default="http://127.0.0.1:8080/chat", help="Chat endpoint URL.")
+    parser.add_argument("--user-id", default="bench-user", help="User id sent in chat payload.")
+    parser.add_argument(
+        "--session-id",
+        default="",
+        help="Optional fixed session id. Empty means create/use server-assigned session each call.",
+    )
     parser.add_argument("--question", default="左心衰竭时最早出现的症状是", help="Question payload.")
     parser.add_argument("--total", type=int, default=100, help="Total request count.")
     parser.add_argument("--concurrency", type=int, default=10, help="Concurrent workers.")
@@ -102,7 +108,13 @@ def main() -> None:
     if args.warmup < 0:
         raise SystemExit("--warmup must be >= 0")
 
-    payload = json.dumps({"question": args.question}, ensure_ascii=False).encode("utf-8")
+    request_body = {
+        "user_id": args.user_id,
+        "question": args.question,
+    }
+    if args.session_id.strip():
+        request_body["session_id"] = args.session_id.strip()
+    payload = json.dumps(request_body, ensure_ascii=False).encode("utf-8")
 
     if args.warmup > 0:
         _ = _run_load(
@@ -129,6 +141,8 @@ def main() -> None:
     summary = {
         "tag": args.tag,
         "url": args.url,
+        "user_id": args.user_id,
+        "session_id": args.session_id,
         "question": args.question,
         "total": len(results),
         "concurrency": args.concurrency,
@@ -157,4 +171,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

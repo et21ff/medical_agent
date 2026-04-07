@@ -12,6 +12,7 @@ from .neo4j_retriever import build_neo4j_retriever
 from .rag_cache import RAGCacheStore, build_redis_client, normalize_query
 from .rerank_provider import build_rerank_provider
 from .retrieval_pipeline import RetrievalBundle, RetrievalOptions, RetrievalPipeline
+from .session_memory import SessionMemoryStore, build_session_redis_client
 from .vector_retriever import build_vector_retriever
 
 SYSTEM_PROMPT = (
@@ -29,6 +30,9 @@ class SupportsChatClient(Protocol):
 
 @dataclass(frozen=True)
 class ChatResult:
+    user_id: str
+    session_id: str
+    history_turns_used: int
     answer: str
     evidence_preview: list[dict[str, Any]]
     query_variants: list[str]
@@ -72,18 +76,43 @@ class MedicalQAService:
     llm_client: SupportsChatClient
     default_options: RetrievalOptions
     cache_store: RAGCacheStore | None = None
+    session_store: SessionMemoryStore | None = None
+    max_history_turns: int = 6
     evidence_preview_limit: int = 3
 
     def ask(
         self,
+        user_id: str,
         question: str,
         *,
+        session_id: str | None = None,
         options: RetrievalOptions | None = None,
     ) -> ChatResult:
         started_total = time.perf_counter()
+        normalized_user_id = user_id.strip()
         normalized_question = question.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id must not be empty")
         if not normalized_question:
             raise ValueError("question must not be empty")
+
+        active_session_id = session_id.strip() if session_id else ""
+        if not active_session_id:
+            if self.session_store is not None and self.session_store.enabled:
+                active_session_id = self.session_store.create_session(normalized_user_id)
+            else:
+                active_session_id = "stateless"
+
+        history_messages: list[dict[str, str]] = []
+        if (
+            self.session_store is not None
+            and self.session_store.enabled
+            and active_session_id != "stateless"
+        ):
+            history_messages = self.session_store.load_recent_messages(
+                normalized_user_id, active_session_id, self.max_history_turns
+            )
+        history_turns_used = len(history_messages) // 2
 
         opts = options or self.default_options
         cache_hit = False
@@ -108,15 +137,40 @@ class MedicalQAService:
         started_llm = time.perf_counter()
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
+        ]
+        messages.extend(history_messages)
+        messages.append(
             {
                 "role": "user",
                 "content": f"{evidence_text}\n\n请严格遵循“回答约束”并直接给出最终答案。",
-            },
-        ]
+            }
+        )
         answer = self.llm_client.complete(messages)
+
+        if (
+            self.session_store is not None
+            and self.session_store.enabled
+            and active_session_id != "stateless"
+        ):
+            self.session_store.append_message(
+                normalized_user_id,
+                active_session_id,
+                "user",
+                normalized_question,
+            )
+            self.session_store.append_message(
+                normalized_user_id,
+                active_session_id,
+                "assistant",
+                answer,
+            )
+
         llm_ms = int((time.perf_counter() - started_llm) * 1000)
         total_ms = int((time.perf_counter() - started_total) * 1000)
         return ChatResult(
+            user_id=normalized_user_id,
+            session_id=active_session_id,
+            history_turns_used=history_turns_used,
             answer=answer,
             evidence_preview=self._build_evidence_preview(bundle),
             query_variants=list(bundle.query_variants),
@@ -217,10 +271,25 @@ def build_default_service() -> MedicalQAService:
             # Fallback to non-cache mode when Redis init fails.
             cache_store = RAGCacheStore(client=None, enabled=False)
 
+    session_store: SessionMemoryStore | None = None
+    if api_cfg.session_enabled:
+        try:
+            session_redis_client = build_session_redis_client(api_cfg.session_redis_url)
+            session_store = SessionMemoryStore(
+                client=session_redis_client,
+                enabled=True,
+                ttl_s=api_cfg.session_ttl_seconds,
+                max_history_turns=api_cfg.max_history_turns,
+            )
+        except Exception:
+            session_store = SessionMemoryStore(client=None, enabled=False)
+
     return MedicalQAService(
         pipeline=pipeline,
         llm_client=llm_client,
         default_options=options,
         cache_store=cache_store,
+        session_store=session_store,
+        max_history_turns=api_cfg.max_history_turns,
         evidence_preview_limit=api_cfg.evidence_preview_limit,
     )

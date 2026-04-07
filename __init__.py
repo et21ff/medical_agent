@@ -26,6 +26,7 @@ from .rerank_provider import RerankProvider, RerankResult, build_rerank_provider
 from .retrieval_pipeline import RetrievalBundle, RetrievalOptions, RetrievalPipeline
 from .vector_retriever import RetrievedText, VectorRetriever, build_vector_retriever
 from .service import ChatResult, MedicalQAService, build_default_service
+from .session_memory import SessionMemoryStore
 
 __all__ = [
     "AgentConfig",
@@ -42,6 +43,7 @@ __all__ = [
     "RAGCacheStore",
     "RerankProvider",
     "RerankResult",
+    "SessionMemoryStore",
     "RetrievalBundle",
     "RetrievalOptions",
     "RetrievalPipeline",
