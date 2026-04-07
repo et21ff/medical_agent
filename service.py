@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -8,6 +9,7 @@ from .config import load_api_config, load_config, load_llm_config
 from .embedding_provider import build_embedding_provider
 from .langchain_tools import format_retrieval_bundle
 from .neo4j_retriever import build_neo4j_retriever
+from .rag_cache import RAGCacheStore, build_redis_client, normalize_query
 from .rerank_provider import build_rerank_provider
 from .retrieval_pipeline import RetrievalBundle, RetrievalOptions, RetrievalPipeline
 from .vector_retriever import build_vector_retriever
@@ -30,6 +32,10 @@ class ChatResult:
     answer: str
     evidence_preview: list[dict[str, Any]]
     query_variants: list[str]
+    cache_hit: bool
+    retrieve_ms: int
+    llm_ms: int
+    total_ms: int
 
 
 class OpenAIChatClient:
@@ -65,6 +71,7 @@ class MedicalQAService:
     pipeline: RetrievalPipeline
     llm_client: SupportsChatClient
     default_options: RetrievalOptions
+    cache_store: RAGCacheStore | None = None
     evidence_preview_limit: int = 3
 
     def ask(
@@ -73,14 +80,32 @@ class MedicalQAService:
         *,
         options: RetrievalOptions | None = None,
     ) -> ChatResult:
+        started_total = time.perf_counter()
         normalized_question = question.strip()
         if not normalized_question:
             raise ValueError("question must not be empty")
 
         opts = options or self.default_options
-        bundle = self.pipeline.retrieve(normalized_question, options=opts)
+        cache_hit = False
+        started_retrieve = time.perf_counter()
+
+        bundle: RetrievalBundle | None = None
+        cache_key = ""
+        if self.cache_store is not None and self.cache_store.enabled:
+            normalized_cache_query = normalize_query(normalized_question)
+            cache_key = self.cache_store.build_cache_key(normalized_cache_query, opts)
+            bundle = self.cache_store.get(cache_key)
+            cache_hit = bundle is not None
+
+        if bundle is None:
+            bundle = self.pipeline.retrieve(normalized_question, options=opts)
+            if self.cache_store is not None and self.cache_store.enabled and cache_key:
+                self.cache_store.set(cache_key, bundle)
+
+        retrieve_ms = int((time.perf_counter() - started_retrieve) * 1000)
         evidence_text = format_retrieval_bundle(bundle)
 
+        started_llm = time.perf_counter()
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -89,10 +114,16 @@ class MedicalQAService:
             },
         ]
         answer = self.llm_client.complete(messages)
+        llm_ms = int((time.perf_counter() - started_llm) * 1000)
+        total_ms = int((time.perf_counter() - started_total) * 1000)
         return ChatResult(
             answer=answer,
             evidence_preview=self._build_evidence_preview(bundle),
             query_variants=list(bundle.query_variants),
+            cache_hit=cache_hit,
+            retrieve_ms=retrieve_ms,
+            llm_ms=llm_ms,
+            total_ms=total_ms,
         )
 
     def _build_evidence_preview(self, bundle: RetrievalBundle) -> list[dict[str, Any]]:
@@ -171,10 +202,25 @@ def build_default_service() -> MedicalQAService:
         model=llm_cfg.llm_model,
         timeout=llm_cfg.request_timeout,
     )
+    cache_store: RAGCacheStore | None = None
+    if api_cfg.cache_enabled:
+        try:
+            redis_client = build_redis_client(api_cfg.redis_url)
+            cache_store = RAGCacheStore(
+                client=redis_client,
+                enabled=True,
+                ttl_s=api_cfg.rag_cache_ttl_seconds,
+                key_version=api_cfg.rag_cache_key_version,
+                corpus_version=api_cfg.rag_corpus_version,
+            )
+        except Exception:
+            # Fallback to non-cache mode when Redis init fails.
+            cache_store = RAGCacheStore(client=None, enabled=False)
+
     return MedicalQAService(
         pipeline=pipeline,
         llm_client=llm_client,
         default_options=options,
+        cache_store=cache_store,
         evidence_preview_limit=api_cfg.evidence_preview_limit,
     )
-

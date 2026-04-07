@@ -31,6 +31,10 @@ class FakeService:
             answer=f"ans:{question}",
             evidence_preview=[{"source": "text", "score": 1.2, "text": "证据"}],
             query_variants=[question],
+            cache_hit=False,
+            retrieve_ms=12,
+            llm_ms=34,
+            total_ms=46,
         )
 
 
@@ -58,6 +62,10 @@ def test_chat_success() -> None:
     assert data["answer"] == "ans:左心衰竭最早症状"
     assert data["evidence_preview"]
     assert data["query_variants"] == ["左心衰竭最早症状"]
+    assert data["cache_hit"] is False
+    assert data["retrieve_ms"] == 12
+    assert data["llm_ms"] == 34
+    assert data["total_ms"] == 46
     assert data["request_id"]
 
 
@@ -90,4 +98,3 @@ def test_chat_unexpected_error_to_502() -> None:
     client, _ = _build_client()
     response = client.post("/chat", json={"question": "boom"})
     assert response.status_code == 502
-

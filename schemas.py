@@ -25,6 +25,9 @@ class ChatResponse(BaseModel):
     answer: str
     evidence_preview: list[dict[str, Any]]
     query_variants: list[str]
+    cache_hit: bool
+    retrieve_ms: int
+    llm_ms: int
+    total_ms: int
     request_id: str
     latency_ms: int
-

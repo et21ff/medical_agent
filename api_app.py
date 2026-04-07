@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 import uuid
 
 from .config import load_api_config
@@ -51,7 +50,6 @@ def create_app(service: MedicalQAService | None = None):
 
     @app.post("/chat", response_model=ChatResponse)
     def chat(request: ChatRequest) -> ChatResponse:
-        started = time.perf_counter()
         request_id = str(uuid.uuid4())
         try:
             options = _merge_retrieval_options(svc.default_options, request.retrieval_options)
@@ -61,13 +59,16 @@ def create_app(service: MedicalQAService | None = None):
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"upstream error: {exc}") from exc
 
-        latency_ms = int((time.perf_counter() - started) * 1000)
         return ChatResponse(
             answer=result.answer,
             evidence_preview=result.evidence_preview,
             query_variants=result.query_variants,
+            cache_hit=result.cache_hit,
+            retrieve_ms=result.retrieve_ms,
+            llm_ms=result.llm_ms,
+            total_ms=result.total_ms,
             request_id=request_id,
-            latency_ms=latency_ms,
+            latency_ms=result.total_ms,
         )
 
     return app
@@ -93,4 +94,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

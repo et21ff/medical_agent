@@ -130,6 +130,12 @@ class LoadAPIConfigTests(unittest.TestCase):
         self.assertEqual(cfg.text_top_k, 5)
         self.assertEqual(cfg.text_recall_k, 20)
         self.assertEqual(cfg.evidence_top_k, 5)
+        self.assertTrue(cfg.cache_enabled)
+        self.assertEqual(cfg.cache_backend, "redis")
+        self.assertEqual(cfg.redis_url, "redis://127.0.0.1:6379/0")
+        self.assertEqual(cfg.rag_cache_ttl_seconds, 1800)
+        self.assertEqual(cfg.rag_cache_key_version, "v1")
+        self.assertEqual(cfg.rag_corpus_version, "exam_v1")
 
     def test_load_api_config_reads_overrides(self) -> None:
         env = {
@@ -143,6 +149,12 @@ class LoadAPIConfigTests(unittest.TestCase):
             "TEXT_TOP_K": "8",
             "TEXT_RECALL_K": "30",
             "EVIDENCE_TOP_K": "7",
+            "CACHE_ENABLED": "false",
+            "CACHE_BACKEND": "redis",
+            "REDIS_URL": "redis://127.0.0.1:6380/1",
+            "RAG_CACHE_TTL_SECONDS": "3600",
+            "RAG_CACHE_KEY_VERSION": "v9",
+            "RAG_CORPUS_VERSION": "exam_v9",
         }
         cfg = load_api_config(env)
         self.assertEqual(cfg.host, "127.0.0.1")
@@ -155,6 +167,12 @@ class LoadAPIConfigTests(unittest.TestCase):
         self.assertEqual(cfg.text_top_k, 8)
         self.assertEqual(cfg.text_recall_k, 30)
         self.assertEqual(cfg.evidence_top_k, 7)
+        self.assertFalse(cfg.cache_enabled)
+        self.assertEqual(cfg.cache_backend, "redis")
+        self.assertEqual(cfg.redis_url, "redis://127.0.0.1:6380/1")
+        self.assertEqual(cfg.rag_cache_ttl_seconds, 3600)
+        self.assertEqual(cfg.rag_cache_key_version, "v9")
+        self.assertEqual(cfg.rag_corpus_version, "exam_v9")
 
     def test_load_api_config_rejects_invalid_values(self) -> None:
         with self.assertRaises(ConfigError):
@@ -163,6 +181,8 @@ class LoadAPIConfigTests(unittest.TestCase):
             load_api_config({"API_DEBUG": "maybe"})
         with self.assertRaises(ConfigError):
             load_api_config({"GRAPH_TOP_K": "0"})
+        with self.assertRaises(ConfigError):
+            load_api_config({"CACHE_BACKEND": "postgres"})
 
 
 if __name__ == "__main__":

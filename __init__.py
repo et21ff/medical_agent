@@ -21,6 +21,7 @@ from .precomputed_rewriter import (
     load_rewrite_map,
 )
 from .query_rewriter import QueryRewriter, rewrite_queries
+from .rag_cache import RAGCacheStore, build_cache_key, normalize_query
 from .rerank_provider import RerankProvider, RerankResult, build_rerank_provider
 from .retrieval_pipeline import RetrievalBundle, RetrievalOptions, RetrievalPipeline
 from .vector_retriever import RetrievedText, VectorRetriever, build_vector_retriever
@@ -38,6 +39,7 @@ __all__ = [
     "Neo4jRetriever",
     "PrecomputedQueryRewriter",
     "QueryRewriter",
+    "RAGCacheStore",
     "RerankProvider",
     "RerankResult",
     "RetrievalBundle",
@@ -61,6 +63,8 @@ __all__ = [
     "load_rewrite_map",
     "retrieval_bundle_to_dict",
     "rewrite_queries",
+    "build_cache_key",
+    "normalize_query",
     "build_default_service",
     "MedicalQAService",
 ]

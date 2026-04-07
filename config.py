@@ -41,6 +41,12 @@ class APIConfig:
     text_top_k: int
     text_recall_k: int
     evidence_top_k: int
+    cache_enabled: bool
+    cache_backend: str
+    redis_url: str
+    rag_cache_ttl_seconds: int
+    rag_cache_key_version: str
+    rag_corpus_version: str
 
 
 def _read_required(env: Mapping[str, str], key: str) -> str:
@@ -182,8 +188,19 @@ def load_api_config(env: Mapping[str, str] | None = None) -> APIConfig:
       - TEXT_TOP_K (default: 5)
       - TEXT_RECALL_K (default: 20)
       - EVIDENCE_TOP_K (default: 5)
+      - CACHE_ENABLED (default: true)
+      - CACHE_BACKEND (default: redis)
+      - REDIS_URL (default: redis://127.0.0.1:6379/0)
+      - RAG_CACHE_TTL_SECONDS (default: 1800)
+      - RAG_CACHE_KEY_VERSION (default: v1)
+      - RAG_CORPUS_VERSION (default: exam_v1)
     """
     source = env if env is not None else os.environ
+    cache_backend = (source.get("CACHE_BACKEND", "").strip() or "redis").lower()
+    if cache_backend != "redis":
+        raise ConfigError(
+            f"Environment variable CACHE_BACKEND must be 'redis' in V1, got: {cache_backend}"
+        )
     return APIConfig(
         host=source.get("API_HOST", "").strip() or "0.0.0.0",
         port=_read_optional_int(source, "API_PORT", 8080),
@@ -197,4 +214,10 @@ def load_api_config(env: Mapping[str, str] | None = None) -> APIConfig:
         text_top_k=_read_optional_int(source, "TEXT_TOP_K", 5),
         text_recall_k=_read_optional_int(source, "TEXT_RECALL_K", 20),
         evidence_top_k=_read_optional_int(source, "EVIDENCE_TOP_K", 5),
+        cache_enabled=_read_optional_bool(source, "CACHE_ENABLED", True),
+        cache_backend=cache_backend,
+        redis_url=source.get("REDIS_URL", "").strip() or "redis://127.0.0.1:6379/0",
+        rag_cache_ttl_seconds=_read_optional_int(source, "RAG_CACHE_TTL_SECONDS", 1800),
+        rag_cache_key_version=source.get("RAG_CACHE_KEY_VERSION", "").strip() or "v1",
+        rag_corpus_version=source.get("RAG_CORPUS_VERSION", "").strip() or "exam_v1",
     )

@@ -112,3 +112,18 @@ BASE_URL=http://127.0.0.1:8080 \
 QUESTION="如何预防结膜炎" \
 bash medical_agent/examples/smoke_api_chat.sh
 ```
+
+## 6) Enable Redis precise-key RAG cache (V1)
+
+The `/chat` pipeline supports exact-key cache for retrieval results:
+
+```bash
+export CACHE_ENABLED=true
+export CACHE_BACKEND=redis
+export REDIS_URL=redis://127.0.0.1:6379/0
+export RAG_CACHE_TTL_SECONDS=1800
+export RAG_CACHE_KEY_VERSION=v1
+export RAG_CORPUS_VERSION=exam_v1
+```
+
+If Redis is unavailable, the service will fall back to direct retrieval automatically.
