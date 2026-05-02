@@ -90,3 +90,25 @@ def test_service_creates_session_and_persists_messages() -> None:
     assert pipeline.calls == 2
     assert any(message["content"] == "q1" for message in llm.seen_messages)
     assert any(message["content"] == "ok" for message in llm.seen_messages)
+
+
+def test_service_can_return_session_history_items() -> None:
+    pipeline = FakePipeline()
+    llm = FakeLLM()
+    session_store = SessionMemoryStore(client=FakeRedis(), enabled=True, max_history_turns=3)
+    service = MedicalQAService(
+        pipeline=pipeline,
+        llm_client=llm,
+        default_options=RetrievalOptions(use_rewrite=False),
+        session_store=session_store,
+    )
+
+    first = service.ask("u1", "q1")
+    history = service.get_session_messages("u1", first.session_id)
+
+    assert history.user_id == "u1"
+    assert history.session_id == first.session_id
+    assert len(history.messages) == 2
+    assert history.messages[0]["role"] == "user"
+    assert history.messages[0]["content"] == "q1"
+    assert isinstance(history.messages[0]["ts"], int)

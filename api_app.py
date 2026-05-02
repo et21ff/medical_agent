@@ -4,7 +4,12 @@ import uuid
 
 from .config import load_api_config
 from .retrieval_pipeline import RetrievalOptions
-from .schemas import ChatRequest, ChatResponse, RetrievalOptionsPayload
+from .schemas import (
+    ChatRequest,
+    ChatResponse,
+    RetrievalOptionsPayload,
+    SessionMessagesResponse,
+)
 from .service import MedicalQAService, build_default_service
 
 
@@ -31,7 +36,7 @@ def _merge_retrieval_options(
 
 def create_app(service: MedicalQAService | None = None):
     try:
-        from fastapi import FastAPI, HTTPException
+        from fastapi import FastAPI, HTTPException, Query
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "fastapi is required to run API app. Install fastapi and uvicorn first."
@@ -77,6 +82,24 @@ def create_app(service: MedicalQAService | None = None):
             total_ms=result.total_ms,
             request_id=request_id,
             latency_ms=result.total_ms,
+        )
+
+    @app.get("/sessions/{session_id}/messages", response_model=SessionMessagesResponse)
+    def get_session_messages(
+        session_id: str,
+        user_id: str = Query(..., min_length=1),
+    ) -> SessionMessagesResponse:
+        try:
+            result = svc.get_session_messages(user_id, session_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"upstream error: {exc}") from exc
+
+        return SessionMessagesResponse(
+            user_id=result.user_id,
+            session_id=result.session_id,
+            messages=result.messages,
         )
 
     return app

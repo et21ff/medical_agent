@@ -156,3 +156,51 @@ curl -s http://127.0.0.1:8080/chat \
     "question": "继续解释上一题"
   }'
 ```
+
+Read existing session messages for page reload recovery:
+
+```bash
+curl -s "http://127.0.0.1:8080/sessions/replace-with-session-id/messages?user_id=demo-user-1"
+```
+
+## 8) Frontend integration defaults (MVP)
+
+Current frontend assumptions for the local demo:
+
+- Use a custom Next.js frontend, not Cherry Studio
+- Keep `/chat` as the only integration endpoint
+- Persist both `user_id` and `session_id` in browser `localStorage`
+- Do not implement session list or historical session switching yet
+- Start a new session by clearing local `session_id`, then let backend issue a new one on the next `/chat`
+
+Suggested browser storage keys:
+
+- `medical_agent:user_id`
+- `medical_agent:session_id`
+
+Recommended frontend flow:
+
+1. On first page load, generate and persist a `user_id` if none exists.
+2. On first question, call `/chat` without `session_id`.
+3. Save returned `session_id` from the response.
+4. Reuse the same `session_id` on later requests.
+5. When user clicks "new session", clear only local `session_id` and chat messages.
+
+Important note:
+
+- Reusing the same `session_id` does not guarantee history is always available forever.
+- Session memory still depends on Redis TTL (`SESSION_TTL_SECONDS`).
+- If Redis history expires, frontend may still send an old `session_id`, but backend can respond without prior context.
+
+For frontend UI, these response fields are considered stable and useful to display:
+
+- `answer`
+- `session_id`
+- `history_turns_used`
+- `evidence_preview`
+- `cache_hit`
+- `retrieve_ms`
+- `llm_ms`
+- `total_ms`
+
+`query_variants` can be treated as a debug field rather than a required UI dependency.

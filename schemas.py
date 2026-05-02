@@ -35,3 +35,15 @@ class ChatResponse(BaseModel):
     total_ms: int
     request_id: str
     latency_ms: int
+
+
+class SessionMessage(BaseModel):
+    role: str
+    content: str
+    ts: int
+
+
+class SessionMessagesResponse(BaseModel):
+    user_id: str
+    session_id: str
+    messages: list[SessionMessage]

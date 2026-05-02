@@ -70,6 +70,12 @@ def test_create_and_roundtrip_messages() -> None:
     history = store.load_recent_messages("u1", session_id, max_turns=3)
     assert history == [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"}]
 
+    items = store.load_recent_message_items("u1", session_id, max_turns=3)
+    assert len(items) == 2
+    assert items[0]["role"] == "user"
+    assert items[0]["content"] == "q1"
+    assert isinstance(items[0]["ts"], int)
+
 
 def test_max_history_window_is_limited() -> None:
     store = SessionMemoryStore(client=FakeRedis(), enabled=True, ttl_s=100, max_history_turns=2)

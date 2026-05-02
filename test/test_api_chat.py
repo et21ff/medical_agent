@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pytest
 
 from medical_agent.retrieval_pipeline import RetrievalOptions
-from medical_agent.service import ChatResult
+from medical_agent.service import ChatResult, SessionHistoryResult
 
 
 @dataclass
@@ -45,6 +45,26 @@ class FakeService:
             retrieve_ms=12,
             llm_ms=34,
             total_ms=46,
+        )
+
+    def get_session_messages(
+        self,
+        user_id: str,
+        session_id: str,
+        *,
+        max_turns: int | None = None,  # noqa: ARG002
+    ) -> SessionHistoryResult:
+        if session_id == "bad":
+            raise ValueError("session_id must not be empty")
+        if session_id == "boom":
+            raise RuntimeError("upstream failed")
+        return SessionHistoryResult(
+            user_id=user_id,
+            session_id=session_id,
+            messages=[
+                {"role": "user", "content": "q1", "ts": 111},
+                {"role": "assistant", "content": "a1", "ts": 112},
+            ],
         )
 
 
@@ -118,3 +138,34 @@ def test_chat_missing_user_id_to_422() -> None:
     client, _ = _build_client()
     response = client.post("/chat", json={"question": "q"})
     assert response.status_code == 422
+
+
+def test_get_session_messages_success() -> None:
+    client, _ = _build_client()
+    response = client.get("/sessions/sid-test/messages", params={"user_id": "u1"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user_id"] == "u1"
+    assert data["session_id"] == "sid-test"
+    assert len(data["messages"]) == 2
+    assert data["messages"][0]["role"] == "user"
+    assert data["messages"][0]["content"] == "q1"
+    assert data["messages"][0]["ts"] == 111
+
+
+def test_get_session_messages_missing_user_id_to_422() -> None:
+    client, _ = _build_client()
+    response = client.get("/sessions/sid-test/messages")
+    assert response.status_code == 422
+
+
+def test_get_session_messages_value_error_to_400() -> None:
+    client, _ = _build_client()
+    response = client.get("/sessions/bad/messages", params={"user_id": "u1"})
+    assert response.status_code == 400
+
+
+def test_get_session_messages_unexpected_error_to_502() -> None:
+    client, _ = _build_client()
+    response = client.get("/sessions/boom/messages", params={"user_id": "u1"})
+    assert response.status_code == 502

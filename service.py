@@ -42,6 +42,13 @@ class ChatResult:
     total_ms: int
 
 
+@dataclass(frozen=True)
+class SessionHistoryResult:
+    user_id: str
+    session_id: str
+    messages: list[dict[str, Any]]
+
+
 class OpenAIChatClient:
     def __init__(
         self,
@@ -178,6 +185,38 @@ class MedicalQAService:
             retrieve_ms=retrieve_ms,
             llm_ms=llm_ms,
             total_ms=total_ms,
+        )
+
+    def get_session_messages(
+        self,
+        user_id: str,
+        session_id: str,
+        *,
+        max_turns: int | None = None,
+    ) -> SessionHistoryResult:
+        normalized_user_id = user_id.strip()
+        normalized_session_id = session_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id must not be empty")
+        if not normalized_session_id:
+            raise ValueError("session_id must not be empty")
+
+        if self.session_store is None or not self.session_store.enabled:
+            return SessionHistoryResult(
+                user_id=normalized_user_id,
+                session_id=normalized_session_id,
+                messages=[],
+            )
+
+        messages = self.session_store.load_recent_message_items(
+            normalized_user_id,
+            normalized_session_id,
+            max_turns=max_turns,
+        )
+        return SessionHistoryResult(
+            user_id=normalized_user_id,
+            session_id=normalized_session_id,
+            messages=messages,
         )
 
     def _build_evidence_preview(self, bundle: RetrievalBundle) -> list[dict[str, Any]]:

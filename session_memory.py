@@ -90,21 +90,28 @@ class SessionMemoryStore:
     def load_recent_messages(
         self, user_id: str, session_id: str, max_turns: int | None = None
     ) -> list[dict[str, str]]:
+        items = self.load_recent_message_items(user_id, session_id, max_turns=max_turns)
+        return [{"role": item["role"], "content": item["content"]} for item in items]
+
+    def load_recent_message_items(
+        self, user_id: str, session_id: str, max_turns: int | None = None
+    ) -> list[dict[str, Any]]:
         if not self.enabled or self.client is None:
             return []
         turns = max_turns if max_turns is not None else self.max_history_turns
         keep_items = max(1, int(turns) * 2)
         try:
             raw_items = self.client.lrange(_session_msgs_key(user_id, session_id), -keep_items, -1)
-            messages: list[dict[str, str]] = []
+            messages: list[dict[str, Any]] = []
             for raw in raw_items:
                 if isinstance(raw, bytes):
                     raw = raw.decode("utf-8")
                 item = json.loads(raw)
                 role = str(item.get("role", "")).strip()
                 content = str(item.get("content", ""))
+                ts = int(item.get("ts", 0) or 0)
                 if role and content:
-                    messages.append({"role": role, "content": content})
+                    messages.append({"role": role, "content": content, "ts": ts})
             return messages
         except Exception as exc:  # noqa: BLE001
             logger.warning("session load failed: %s", exc)
@@ -119,4 +126,3 @@ def build_session_redis_client(redis_url: str) -> SupportsRedisSessionClient:
             "redis package is required when SESSION_ENABLED is true. Install redis first."
         ) from exc
     return redis.Redis.from_url(redis_url)
-
