@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from medical_agent.rag_cache import RAGCacheStore
-from medical_agent.retrieval_pipeline import RetrievalBundle, RetrievalOptions
+from medical_agent.retrieval_pipeline import EvidenceItem, RetrievalBundle, RetrievalOptions
 from medical_agent.service import MedicalQAService
 
 
@@ -24,11 +24,29 @@ class FakePipeline:
 
     def retrieve(self, question: str, *, options: RetrievalOptions | None = None) -> RetrievalBundle:  # noqa: ARG002
         self.calls += 1
-        return RetrievalBundle(original_question=question, query_variants=[question])
+        return RetrievalBundle(
+            original_question=question,
+            query_variants=[question],
+            evidence_items=[
+                EvidenceItem(
+                    text="结膜炎的预防包括注意手卫生与避免共用毛巾。",
+                    source_type="text",
+                    source_id="doc-1",
+                    query_variant=question,
+                    graph_score=None,
+                    faiss_score=0.8,
+                    rerank_score=0.9,
+                    final_score=0.9,
+                )
+            ],
+        )
 
 
 class FakeLLM:
-    def complete(self, messages: list[dict[str, str]]) -> str:  # noqa: ARG002
+    def complete(self, messages: list[dict[str, str]]) -> str:
+        content = messages[-1]["content"]
+        if "允许的 decision 只有：" in content and "answer" in content:
+            return '{"decision":"answer","reason":"evidence is sufficient","focused_question":""}'
         return "ok"
 
 
